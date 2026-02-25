@@ -152,7 +152,7 @@ Ensure the EC2 instance has an assigned **Elastic IP** that ULIP has whitelisted
   - **Method**: `GET`
   - **Path**: `/health`
   - **Description**: Simple liveness check.
-  - **Response**:
+  - **Successful response**:
 
     ```json
     {
@@ -174,7 +174,7 @@ Ensure the EC2 instance has an assigned **Elastic IP** that ULIP has whitelisted
     }
     ```
 
-  - **Successful response (example)**:
+  - **Successful response (example)** – ULIP XML is parsed and mapped into a rich, stable schema:
 
     ```json
     {
@@ -183,14 +183,30 @@ Ensure the EC2 instance has an assigned **Elastic IP** that ULIP has whitelisted
         "vehicle": {
           "vehicleNumber": "DL12CX0574",
           "ownerName": "JOHN DOE",
-          "registrationDate": "2018-05-01",
-          "registrationValidTill": "2033-05-01",
-          "fuelType": "DIESEL",
+          "address": "123 MAIN STREET",
+          "status": "ACTIVE",
+          "rcRegistrationDate": "2018-05-01",
+          "fitnessCertificateExpiry": "2033-05-01",
+          "insuranceExpiry": "2026-05-01",
+          "taxExpiry": "2030-05-01",
+          "permitExpiry": "2031-01-01",
+          "puccExpiry": "2025-05-01",
+          "nationalPermitExpiry": "2032-05-01",
+          "permitType": "NATIONAL",
+          "puccNumber": "PUCC123456",
+          "permitNumber": "PERMIT12345",
+          "insurer": "XYZ INSURANCE CO",
+          "insuranceNumber": "POLICY123456",
+          "financier": "ABC BANK",
           "vehicleClass": "LMV",
+          "bodyType": "SEDAN",
+          "fuelType": "DIESEL",
           "chassisNumber": "XXXXXXXXXXXX1234",
           "engineNumber": "ENG1234567",
-          "insuranceValidTill": "2026-05-01",
-          "status": "ACTIVE"
+          "manufacturer": "OEM MOTORS",
+          "model": "OEM SEDAN",
+          "normsType": "BS6",
+          "vehicleCategory": "NT"
         },
         "source": "ULIP_VAHAN"
       }
@@ -295,7 +311,7 @@ Logs are output as structured JSON on stdout and include a `requestId` you can u
 
     ```json
     {
-      "dlnumber": "GJ04 20120005008",
+      "dlnumber": "HR51 20210018922",
       "dob": "1987-05-26"
     }
     ```
@@ -303,19 +319,19 @@ Logs are output as structured JSON on stdout and include a `requestId` you can u
   - **Business rules applied**:
     - Licence **must be active** (`licence_status === "Active"` after trimming, case-insensitive).
     - `valid_to` must be present and `valid_to > today`; otherwise the gateway returns HTTP 400 with `code: "BUSINESS_RULE_VIOLATION"`.
-  - **Response shape** (no raw ULIP payload; only normalized fields):
+  - **Successful response (example)**:
 
     ```json
     {
-      "requestId": "...",
+      "requestId": "2f453171-0938-45c6-8ff7-cb6c8021d6a2",
       "data": {
         "driver": {
           "dl_number": "HR51 20210018922",
           "dob": "1987-05-26",
-          "full_name": "JOHN DOE",
+          "full_name": "V*** A***",
           "blood_group": "B+",
-          "address_line_1": "...",
-          "address_line_2": "...",
+          "address_line_1": "H*O* *5*/* *E*T*R*7*B",
+          "address_line_2": "B*H*N* *U*T* *W*E* ",
           "gender": "Male",
           "bio_id": "270401VAIMAHMANIK",
           "issued_at": "2021-07-20",
@@ -332,6 +348,14 @@ Logs are output as structured JSON on stdout and include a `requestId` you can u
               "cov_office_name": "RLA FARIDABAD (NT)",
               "vehicle_type_abbr": "LMV",
               "vehicle_type_description": "LIGHT MOTOR VEHICLE"
+            },
+            {
+              "licence_number": "HR51 20210018922",
+              "application_number": "2220004221",
+              "cov_issue_date": "2021-07-20",
+              "cov_office_name": "RLA FARIDABAD (NT)",
+              "vehicle_type_abbr": "MCWG",
+              "vehicle_type_description": "Motor Cycle with Gear(Non Transport)"
             }
           ]
         },
@@ -357,11 +381,11 @@ Logs are output as structured JSON on stdout and include a `requestId` you can u
   - **ULIP calls performed**:
     - `FASTAG/01` for toll plaza **transaction history**.
     - `FASTAG/02` for **static tag/vehicle details** (`vehicledetails[].detail[]`).
-  - **Response shape** (aggregated; no raw ULIP envelope):
+  - **Successful response (example)**:
 
     ```json
     {
-      "requestId": "...",
+      "requestId": "5b8aa08b-b72a-4a6f-9f88-1f9a3a8c7f10",
       "data": {
         "fastag": {
           "vehicleNumber": "HR38AF9143",
