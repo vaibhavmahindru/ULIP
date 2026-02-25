@@ -281,3 +281,125 @@ Ensure the EC2 instance has an assigned **Elastic IP** that ULIP has whitelisted
 
 Logs are output as structured JSON on stdout and include a `requestId` you can use to trace a call end-to-end.
 
+---
+
+### Additional ULIP endpoints
+
+- **Driver details via ULIP SARATHI**
+  - **Method**: `POST`
+  - **Path**: `/ulip/v1/driver/details`
+  - **Headers**:
+    - `Content-Type: application/json`
+    - `X-Internal-API-Key: <your INTERNAL_API_KEY>`
+  - **Request body**:
+
+    ```json
+    {
+      "dlnumber": "GJ04 20120005008",
+      "dob": "1987-05-26"
+    }
+    ```
+
+  - **Business rules applied**:
+    - Licence **must be active** (`licence_status === "Active"` after trimming, case-insensitive).
+    - `valid_to` must be present and `valid_to > today`; otherwise the gateway returns HTTP 400 with `code: "BUSINESS_RULE_VIOLATION"`.
+  - **Response shape** (no raw ULIP payload; only normalized fields):
+
+    ```json
+    {
+      "requestId": "...",
+      "data": {
+        "driver": {
+          "dl_number": "HR51 20210018922",
+          "dob": "1987-05-26",
+          "full_name": "JOHN DOE",
+          "blood_group": "B+",
+          "address_line_1": "...",
+          "address_line_2": "...",
+          "gender": "Male",
+          "bio_id": "270401VAIMAHMANIK",
+          "issued_at": "2021-07-20",
+          "valid_from": "2021-07-20",
+          "valid_to": "2041-04-26",
+          "licence_status": "Active",
+          "rto_name": "RLA FARIDABAD (NT)",
+          "rto_code": "HR51",
+          "categories": [
+            {
+              "licence_number": "HR51 20210018922",
+              "application_number": "2220004221",
+              "cov_issue_date": "2021-07-20",
+              "cov_office_name": "RLA FARIDABAD (NT)",
+              "vehicle_type_abbr": "LMV",
+              "vehicle_type_description": "LIGHT MOTOR VEHICLE"
+            }
+          ]
+        },
+        "source": "ULIP_SARATHI"
+      }
+    }
+    ```
+
+- **FASTag details via ULIP FASTAG**
+  - **Method**: `POST`
+  - **Path**: `/ulip/v1/fastag/details`
+  - **Headers**:
+    - `Content-Type: application/json`
+    - `X-Internal-API-Key: <your INTERNAL_API_KEY>`
+  - **Request body**:
+
+    ```json
+    {
+      "vehicleNumber": "HR38AF9143"
+    }
+    ```
+
+  - **ULIP calls performed**:
+    - `FASTAG/01` for toll plaza **transaction history**.
+    - `FASTAG/02` for **static tag/vehicle details** (`vehicledetails[].detail[]`).
+  - **Response shape** (aggregated; no raw ULIP envelope):
+
+    ```json
+    {
+      "requestId": "...",
+      "data": {
+        "fastag": {
+          "vehicleNumber": "HR38AF9143",
+          "result": "SUCCESS",
+          "respCode": "000",
+          "timestamp": "2026-02-25T13:40:32",
+          "tagDetails": {
+            "tagId": "34161FA820328C740276BDC0",
+            "regNumber": "HR38AF9143",
+            "tid": "E20034120136030011339437",
+            "vehicleClass": "VC14",
+            "tagStatus": "A",
+            "issueDate": "2023-05-30",
+            "excCode": "00",
+            "bankId": "607802",
+            "commercialVehicleFlag": "T"
+          },
+          "vehicle": {
+            "errCode": "000",
+            "totalTagsInMsg": "9",
+            "msgNum": "1",
+            "totalTagsInResponse": "9",
+            "totalMsg": "1",
+            "transactions": [
+              {
+                "readerReadTime": "2026-02-21 13:22:09.000",
+                "seqNo": "0010002602211322285945",
+                "laneDirection": "W",
+                "tollPlazaGeocode": "25.5871683,74.593839",
+                "tollPlazaName": "Lambiya Kalan",
+                "vehicleType": "VC14",
+                "vehicleRegNo": "HR38AF9143"
+              }
+            ]
+          }
+        },
+        "source": "ULIP_FASTAG"
+      }
+    }
+    ```
+
