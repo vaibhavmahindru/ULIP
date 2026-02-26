@@ -16,6 +16,7 @@ export interface Licence {
   dob: string;
 
   full_name: string | null;
+  father_name: string | null;
   blood_group: string | null;
   address_line_1: string | null;
   address_line_2: string | null;
@@ -141,6 +142,7 @@ export async function getDriverDetailsFromUlip(params: {
   const rto_code = normalizeString(dlobj.dlRtoCode);
 
   const full_name = normalizeString(bioObj.bioFullName);
+  const father_name = normalizeString(bioObj.bioSwdFullName);
   const blood_group = normalizeString(bioObj.bioBloodGroup);
   const address_line_1 = normalizeString(bioObj.bioPermAdd1);
   const address_line_2 = normalizeString(bioObj.bioPermAdd2);
@@ -188,6 +190,7 @@ export async function getDriverDetailsFromUlip(params: {
     dl_number: dlnumber,
     dob,
     full_name,
+    father_name,
     blood_group,
     address_line_1,
     address_line_2,
