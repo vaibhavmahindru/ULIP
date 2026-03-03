@@ -1,4 +1,3 @@
-import { parseStringPromise } from "xml2js";
 import { callUlip } from "./ulipClient";
 import { ApiError } from "../utils/errors";
 
@@ -42,6 +41,12 @@ function normalizeDate(value: unknown): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
+  // Handles formats like "2026-02-25" and "03-Mar-2026 02:03:52663"
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
   // Try known formats
   const parts = trimmed.split("-");
   if (parts.length === 3) {
@@ -58,20 +63,26 @@ function normalizeDate(value: unknown): string | null {
   return trimmed;
 }
 
-function extractUlipXmlFromVahanResponse(ulipResponse: any): string {
+function normalizeString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function extractVahanPayload(ulipResponse: any): Record<string, unknown> {
   const resp = ulipResponse?.response;
   if (Array.isArray(resp) && resp[0]?.response) {
     const payload = resp[0].response;
-    if (typeof payload === "string") {
-      if (payload === "Vehicle Details not Found") {
-        throw new ApiError({
-          statusCode: 404,
-          code: "NOT_FOUND",
-          message: "Vehicle details not found",
-          expose: true
-        });
-      }
-      return payload;
+    if (typeof payload === "object" && payload !== null && !Array.isArray(payload)) {
+      return payload as Record<string, unknown>;
+    }
+    if (typeof payload === "string" && payload.trim() === "Vehicle Details not Found") {
+      throw new ApiError({
+        statusCode: 404,
+        code: "NOT_FOUND",
+        message: "Vehicle details not found",
+        expose: true
+      });
     }
   }
 
@@ -89,132 +100,162 @@ export async function getVehicleDetailsFromUlip(params: {
   const { vehicleNumber, requestId } = params;
 
   const ulipResponse = await callUlip<{ vehiclenumber: string }, any>({
-    path: "VAHAN/01",
+    path: "VAHAN/04",
     body: { vehiclenumber: vehicleNumber },
     requestId
   });
 
-  const xml = extractUlipXmlFromVahanResponse(ulipResponse);
-
-  const parsed = await parseStringPromise(xml, {
-    explicitArray: false,
-    trim: true
-  });
-
-  const root = parsed?.VehicleDetails ?? parsed;
+  const root = extractVahanPayload(ulipResponse);
 
   const regNo =
-    root?.rc_regn_no ?? root?.Regn_no ?? root?.registration_number ?? vehicleNumber;
+    (root.rcRegnNo as string | undefined) ??
+    (root.rc_regn_no as string | undefined) ??
+    (root.Regn_no as string | undefined) ??
+    (root.registration_number as string | undefined) ??
+    vehicleNumber;
 
   const details: VehicleDetails = {
     vehicleNumber: String(regNo),
 
     ownerName:
-      root?.rc_owner_name ??
-      root?.Owner_name ??
-      root?.ownerName ??
-      root?.owner_name ??
+      normalizeString(root.rcOwnerName) ??
+      normalizeString(root.rc_owner_name) ??
+      normalizeString(root.Owner_name) ??
+      normalizeString(root.ownerName) ??
+      normalizeString(root.owner_name) ??
       null,
     address:
-      root?.rc_permanent_address ??
-      root?.Permanent_address ??
-      root?.permanent_address ??
+      normalizeString(root.rcPermanentAddress) ??
+      normalizeString(root.rc_permanent_address) ??
+      normalizeString(root.Permanent_address) ??
+      normalizeString(root.permanent_address) ??
       null,
     status:
-      root?.rc_status ??
-      root?.Status ??
-      root?.vehicleStatus ??
-      root?.rc_status_as_on ??
+      normalizeString(root.rcStatus) ??
+      normalizeString(root.rc_status) ??
+      normalizeString(root.Status) ??
+      normalizeString(root.vehicleStatus) ??
+      normalizeString(root.rcStatusAsOn) ??
+      normalizeString(root.rc_status_as_on) ??
       null,
 
     rcRegistrationDate: normalizeDate(
-      root?.rc_regn_dt ?? root?.Registration_date ?? root?.registrationDate
+      root.rcRegnDt ?? root.rc_regn_dt ?? root.Registration_date ?? root.registrationDate
     ),
     fitnessCertificateExpiry: normalizeDate(
-      root?.rc_regn_upto ?? root?.Registration_valid_upto ?? root?.regn_valid_upto
+      root.rcRegnUpto ?? root.rc_regn_upto ?? root.Registration_valid_upto ?? root.regn_valid_upto
     ),
     insuranceExpiry: normalizeDate(
-      root?.rc_insurance_upto ?? root?.Insurance_valid_upto ?? root?.insuranceValidTill
+      root.rcInsuranceUpto ??
+        root.rc_insurance_upto ??
+        root.Insurance_valid_upto ??
+        root.insuranceValidTill
     ),
-    taxExpiry: normalizeDate(root?.rc_tax_upto ?? root?.Tax_valid_upto ?? null),
+    taxExpiry: normalizeDate(root.rcTaxUpto ?? root.rc_tax_upto ?? root.Tax_valid_upto ?? null),
     permitExpiry: normalizeDate(
-      root?.rc_permit_valid_upto ??
-        root?.Permit_valid_upto ??
-        root?.rc_permit_upto ??
+      root.rcPermitValidUpto ??
+        root.rc_permit_valid_upto ??
+        root.Permit_valid_upto ??
+        root.rc_permit_upto ??
         null
     ),
     puccExpiry: normalizeDate(
-      root?.rc_pucc_upto ?? root?.PUCC_valid_upto ?? root?.pucc_valid_upto
+      root.rcPuccUpto ?? root.rc_pucc_upto ?? root.PUCC_valid_upto ?? root.pucc_valid_upto
     ),
     nationalPermitExpiry: normalizeDate(
-      root?.rc_np_upto ?? root?.National_permit_valid_upto ?? root?.np_valid_upto
+      root.rcNpUpto ?? root.rc_np_upto ?? root.National_permit_valid_upto ?? root.np_valid_upto
     ),
 
     permitType:
-      root?.rc_permit_type ??
-      root?.Permit_type ??
-      root?.permit_type ??
+      normalizeString(root.rcPermitType) ??
+      normalizeString(root.rc_permit_type) ??
+      normalizeString(root.Permit_type) ??
+      normalizeString(root.permit_type) ??
       null,
     puccNumber:
-      root?.rc_pucc_no ??
-      root?.PUCC_no ??
-      root?.pucc_no ??
+      normalizeString(root.rcPuccNo) ??
+      normalizeString(root.rc_pucc_no) ??
+      normalizeString(root.PUCC_no) ??
+      normalizeString(root.pucc_no) ??
       null,
     permitNumber:
-      root?.rc_permit_no ??
-      root?.Permit_no ??
-      root?.permit_no ??
+      normalizeString(root.rcPermitNo) ??
+      normalizeString(root.rc_permit_no) ??
+      normalizeString(root.Permit_no) ??
+      normalizeString(root.permit_no) ??
       null,
     insurer:
-      root?.rc_insurance_comp ??
-      root?.Insurance_comp ??
-      root?.insurance_company ??
+      normalizeString(root.rcInsuranceComp) ??
+      normalizeString(root.rc_insurance_comp) ??
+      normalizeString(root.Insurance_comp) ??
+      normalizeString(root.insurance_company) ??
       null,
     insuranceNumber:
-      root?.rc_insurance_policy_no ??
-      root?.Insurance_policy_no ??
-      root?.insurance_policy_no ??
+      normalizeString(root.rcInsurancePolicyNo) ??
+      normalizeString(root.rc_insurance_policy_no) ??
+      normalizeString(root.Insurance_policy_no) ??
+      normalizeString(root.insurance_policy_no) ??
       null,
     financier:
-      root?.rc_financer ??
-      root?.Financer ??
-      root?.financier ??
+      normalizeString(root.rcFinancer) ??
+      normalizeString(root.rc_financer) ??
+      normalizeString(root.Financer) ??
+      normalizeString(root.financier) ??
       null,
 
     vehicleClass:
-      root?.rc_vh_class_desc ??
-      root?.Vehicle_class_desc ??
-      root?.vehicleClass ??
+      normalizeString(root.rcVhClassDesc) ??
+      normalizeString(root.rc_vh_class_desc) ??
+      normalizeString(root.Vehicle_class_desc) ??
+      normalizeString(root.vehicleClass) ??
       null,
     bodyType:
-      root?.rc_body_type_desc ??
-      root?.Body_type_desc ??
-      root?.body_type ??
+      normalizeString(root.rcBodyTypeDesc) ??
+      normalizeString(root.rc_body_type_desc) ??
+      normalizeString(root.Body_type_desc) ??
+      normalizeString(root.body_type) ??
       null,
-    fuelType: root?.rc_fuel_desc ?? root?.Fuel_desc ?? root?.fuelType ?? null,
+    fuelType:
+      normalizeString(root.rcFuelDesc) ??
+      normalizeString(root.rc_fuel_desc) ??
+      normalizeString(root.Fuel_desc) ??
+      normalizeString(root.fuelType) ??
+      null,
     chassisNumber:
-      root?.rc_chasi_no ?? root?.Chasi_no ?? root?.chassisNumber ?? null,
+      normalizeString(root.rcChasiNo) ??
+      normalizeString(root.rc_chasi_no) ??
+      normalizeString(root.Chasi_no) ??
+      normalizeString(root.chassisNumber) ??
+      null,
     engineNumber:
-      root?.rc_eng_no ?? root?.Engine_no ?? root?.engineNumber ?? null,
+      normalizeString(root.rcEngNo) ??
+      normalizeString(root.rc_eng_no) ??
+      normalizeString(root.Engine_no) ??
+      normalizeString(root.engineNumber) ??
+      null,
     manufacturer:
-      root?.rc_maker_desc ??
-      root?.Maker_desc ??
-      root?.manufacturer ??
+      normalizeString(root.rcMakerDesc) ??
+      normalizeString(root.rc_maker_desc) ??
+      normalizeString(root.Maker_desc) ??
+      normalizeString(root.manufacturer) ??
       null,
     model:
-      root?.rc_maker_model ??
-      root?.Maker_model ??
-      root?.model ??
+      normalizeString(root.rcMakerModel) ??
+      normalizeString(root.rc_maker_model) ??
+      normalizeString(root.Maker_model) ??
+      normalizeString(root.model) ??
       null,
     normsType:
-      root?.rc_norms_desc ??
-      root?.Norms_desc ??
-      root?.norms_type ??
+      normalizeString(root.rcNormsDesc) ??
+      normalizeString(root.rc_norms_desc) ??
+      normalizeString(root.Norms_desc) ??
+      normalizeString(root.norms_type) ??
       null,
     vehicleCategory:
-      root?.rc_vch_catg ??
-      root?.Vehicle_category ??
-      root?.vehicle_category ??
+      normalizeString(root.rcVchCatg) ??
+      normalizeString(root.rc_vch_catg) ??
+      normalizeString(root.Vehicle_category) ??
+      normalizeString(root.vehicle_category) ??
       null
   };
 
