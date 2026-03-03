@@ -71,19 +71,30 @@ function normalizeString(value: unknown): string | null {
 
 function extractVahanPayload(ulipResponse: any): Record<string, unknown> {
   const resp = ulipResponse?.response;
-  if (Array.isArray(resp) && resp[0]?.response) {
-    const payload = resp[0].response;
-    if (typeof payload === "object" && payload !== null && !Array.isArray(payload)) {
+  let payload: unknown = undefined;
+
+  if (Array.isArray(resp) && resp.length > 0) {
+    payload = resp[0]?.response;
+  } else if (resp && typeof resp === "object") {
+    payload = (resp as any).response ?? resp;
+  }
+
+  if (typeof payload === "object" && payload !== null) {
+    if (Array.isArray(payload) && payload.length > 0 && typeof payload[0] === "object") {
+      return payload[0] as Record<string, unknown>;
+    }
+    if (!Array.isArray(payload)) {
       return payload as Record<string, unknown>;
     }
-    if (typeof payload === "string" && payload.trim() === "Vehicle Details not Found") {
-      throw new ApiError({
-        statusCode: 404,
-        code: "NOT_FOUND",
-        message: "Vehicle details not found",
-        expose: true
-      });
-    }
+  }
+
+  if (typeof payload === "string" && payload.trim() === "Vehicle Details not Found") {
+    throw new ApiError({
+      statusCode: 404,
+      code: "NOT_FOUND",
+      message: "Vehicle details not found",
+      expose: true
+    });
   }
 
   throw new ApiError({

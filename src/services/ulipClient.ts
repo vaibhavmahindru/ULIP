@@ -18,6 +18,12 @@ const circuit: CircuitState = {
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
 
+function buildUlipUrl(baseUrl: string, path: string): string {
+  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const relative = path.replace(/^\/+/, "");
+  return new URL(relative, base).toString();
+}
+
 function isCircuitOpen() {
   if (!env.ULIP_CIRCUIT_BREAKER_ENABLED) {
     return false;
@@ -69,9 +75,7 @@ async function loginToUlip(requestId?: string): Promise<string> {
     return cachedToken;
   }
 
-  const loginUrl =
-    env.ULIP_LOGIN_URL ??
-    `${env.ULIP_BASE_URL.replace(/\/$/, "")}/user/login`.replace(/\/{2,}/g, "/");
+  const loginUrl = env.ULIP_LOGIN_URL ?? buildUlipUrl(env.ULIP_BASE_URL, "user/login");
 
   const body = {
     username: env.ULIP_USERNAME,
@@ -229,7 +233,7 @@ export async function callUlip<TRequest, TResponse>(
 
   const token = await loginToUlip(requestId);
 
-  const url = `${env.ULIP_BASE_URL.replace(/\/$/, "")}/${path}`.replace(/\/{2,}/g, "/");
+  const url = buildUlipUrl(env.ULIP_BASE_URL, path);
 
   return retryWithBackoff<TResponse>(
     async (attempt) => {

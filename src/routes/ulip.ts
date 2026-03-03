@@ -6,7 +6,8 @@ import { validateBody } from "../middleware/validate";
 import {
   getVehicleDetailsHandler,
   getDriverDetailsHandler,
-  getFastagDetailsHandler
+  getFastagDetailsHandler,
+  getEChallanDetailsHandler
 } from "../controllers/ulipController";
 
 const vehicleDetailsSchema = Joi.object({
@@ -23,6 +24,10 @@ const sarathiSchema = Joi.object({
 });
 
 const fastagSchema = Joi.object({
+  vehicleNumber: Joi.string().trim().min(4).max(32).required()
+});
+
+const echallanSchema = Joi.object({
   vehicleNumber: Joi.string().trim().min(4).max(32).required()
 });
 
@@ -50,5 +55,13 @@ ulipRouter.post(
   apiRateLimiter,
   validateBody(fastagSchema),
   getFastagDetailsHandler
+);
+
+ulipRouter.post(
+  "/ulip/v1/echallan/details",
+  internalApiKeyAuth,
+  apiRateLimiter,
+  validateBody(echallanSchema),
+  getEChallanDetailsHandler
 );
 

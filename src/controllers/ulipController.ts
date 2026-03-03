@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { getVehicleDetailsFromUlip } from "../services/vehicleService";
 import { getDriverDetailsFromUlip } from "../services/sarathiService";
 import { getFastagDetailsFromUlip } from "../services/fastagService";
+import { getEChallanDetailsFromUlip } from "../services/echallanService";
 
 export async function getVehicleDetailsHandler(
   req: Request,
@@ -62,6 +63,27 @@ export async function getFastagDetailsHandler(
       data: {
         fastag: details,
         source: "ULIP_FASTAG"
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getEChallanDetailsHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { vehicleNumber } = req.body as { vehicleNumber: string };
+    const details = await getEChallanDetailsFromUlip({ vehicleNumber, requestId: req.id });
+
+    res.status(200).json({
+      requestId: req.id,
+      data: {
+        echallan: details,
+        source: "ULIP_ECHALLAN"
       }
     });
   } catch (err) {
