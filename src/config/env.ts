@@ -13,6 +13,11 @@ const envSchema = Joi.object({
   ULIP_BASE_URL: Joi.string().uri().required(),
   ULIP_TIMEOUT_MS: Joi.number().integer().min(100).max(120_000).default(10_000),
   ULIP_RETRY_COUNT: Joi.number().integer().min(0).max(10).default(2),
+  ULIP_TIMEOUT_LOGIN_MS: Joi.number().integer().min(100).max(120_000).default(10_000),
+  ULIP_TIMEOUT_VAHAN_MS: Joi.number().integer().min(100).max(120_000).optional(),
+  ULIP_TIMEOUT_SARATHI_MS: Joi.number().integer().min(100).max(120_000).optional(),
+  ULIP_TIMEOUT_FASTAG_MS: Joi.number().integer().min(100).max(120_000).optional(),
+  ULIP_TIMEOUT_ECHALLAN_MS: Joi.number().integer().min(100).max(120_000).optional(),
 
   // Optional but recommended, ULIP seems to use /user/login for bearer token
   ULIP_LOGIN_URL: Joi.string().uri().optional(),
@@ -24,7 +29,11 @@ const envSchema = Joi.object({
   // Circuit breaker (optional advanced)
   ULIP_CIRCUIT_BREAKER_ENABLED: Joi.boolean().default(false),
   ULIP_CIRCUIT_BREAKER_FAILURE_THRESHOLD: Joi.number().integer().min(1).default(5),
-  ULIP_CIRCUIT_BREAKER_COOLDOWN_MS: Joi.number().integer().min(1000).default(30_000)
+  ULIP_CIRCUIT_BREAKER_COOLDOWN_MS: Joi.number().integer().min(1000).default(30_000),
+
+  // Alerting
+  ULIP_ALERT_WEBHOOK_URL: Joi.string().uri().optional(),
+  ULIP_ALERT_COOLDOWN_MS: Joi.number().integer().min(1000).default(300_000)
 })
   .unknown(true)
   .required();
@@ -62,6 +71,11 @@ export const env = {
   ULIP_BASE_URL: value.ULIP_BASE_URL as string,
   ULIP_TIMEOUT_MS: value.ULIP_TIMEOUT_MS as number,
   ULIP_RETRY_COUNT: value.ULIP_RETRY_COUNT as number,
+  ULIP_TIMEOUT_LOGIN_MS: value.ULIP_TIMEOUT_LOGIN_MS as number,
+  ULIP_TIMEOUT_VAHAN_MS: value.ULIP_TIMEOUT_VAHAN_MS as number | undefined,
+  ULIP_TIMEOUT_SARATHI_MS: value.ULIP_TIMEOUT_SARATHI_MS as number | undefined,
+  ULIP_TIMEOUT_FASTAG_MS: value.ULIP_TIMEOUT_FASTAG_MS as number | undefined,
+  ULIP_TIMEOUT_ECHALLAN_MS: value.ULIP_TIMEOUT_ECHALLAN_MS as number | undefined,
   ULIP_LOGIN_URL: value.ULIP_LOGIN_URL as string | undefined,
 
   RATE_LIMIT_WINDOW_MS: value.RATE_LIMIT_WINDOW_MS as number,
@@ -70,6 +84,9 @@ export const env = {
   ULIP_CIRCUIT_BREAKER_ENABLED: value.ULIP_CIRCUIT_BREAKER_ENABLED as boolean,
   ULIP_CIRCUIT_BREAKER_FAILURE_THRESHOLD:
     value.ULIP_CIRCUIT_BREAKER_FAILURE_THRESHOLD as number,
-  ULIP_CIRCUIT_BREAKER_COOLDOWN_MS: value.ULIP_CIRCUIT_BREAKER_COOLDOWN_MS as number
+  ULIP_CIRCUIT_BREAKER_COOLDOWN_MS: value.ULIP_CIRCUIT_BREAKER_COOLDOWN_MS as number,
+
+  ULIP_ALERT_WEBHOOK_URL: value.ULIP_ALERT_WEBHOOK_URL as string | undefined,
+  ULIP_ALERT_COOLDOWN_MS: value.ULIP_ALERT_COOLDOWN_MS as number
 };
 
