@@ -1,5 +1,6 @@
 import express, { type RequestHandler } from "express";
 import helmet from "helmet";
+import cors from "cors";
 import { healthRouter } from "./routes/health";
 import { requestIdMiddleware } from "./middleware/requestId";
 import { httpLogger } from "./middleware/httpLogger";
@@ -14,6 +15,7 @@ export function buildApp() {
 
   app.use(helmet() as RequestHandler);
   app.disable("x-powered-by");
+  app.use(cors({ origin: "*" }) as RequestHandler);
 
   app.use(express.json({ limit: "1mb" }) as RequestHandler);
 
