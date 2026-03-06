@@ -9,6 +9,24 @@ interface CircuitState {
   openedAt?: number;
 }
 
+class UlipRequestError extends ApiError {
+  public readonly retryable: boolean;
+
+  constructor(opts: {
+    statusCode: number;
+    code: ApiError["code"];
+    message: string;
+    retryable: boolean;
+  }) {
+    super({
+      statusCode: opts.statusCode,
+      code: opts.code,
+      message: opts.message
+    });
+    this.retryable = opts.retryable;
+  }
+}
+
 const circuit: CircuitState = {
   open: false,
   failureCount: 0,
@@ -17,11 +35,77 @@ const circuit: CircuitState = {
 
 let cachedToken: string | null = null;
 let tokenExpiresAt = 0;
+let lastAlertAtByKey: Record<string, number> = {};
 
 function buildUlipUrl(baseUrl: string, path: string): string {
   const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   const relative = path.replace(/^\/+/, "");
   return new URL(relative, base).toString();
+}
+
+function timeoutForPath(path: string): number {
+  if (path.startsWith("VAHAN/")) {
+    return env.ULIP_TIMEOUT_VAHAN_MS ?? env.ULIP_TIMEOUT_MS;
+  }
+  if (path.startsWith("SARATHI/")) {
+    return env.ULIP_TIMEOUT_SARATHI_MS ?? env.ULIP_TIMEOUT_MS;
+  }
+  if (path.startsWith("FASTAG/")) {
+    return env.ULIP_TIMEOUT_FASTAG_MS ?? env.ULIP_TIMEOUT_MS;
+  }
+  if (path.startsWith("ECHALLAN/")) {
+    return env.ULIP_TIMEOUT_ECHALLAN_MS ?? env.ULIP_TIMEOUT_MS;
+  }
+  return env.ULIP_TIMEOUT_MS;
+}
+
+function shouldSendAlert(key: string): boolean {
+  const now = Date.now();
+  const last = lastAlertAtByKey[key] ?? 0;
+  if (now - last < env.ULIP_ALERT_COOLDOWN_MS) {
+    return false;
+  }
+  lastAlertAtByKey[key] = now;
+  return true;
+}
+
+async function emitUlipAlert(opts: {
+  key: string;
+  title: string;
+  requestId?: string;
+  details?: Record<string, unknown>;
+}) {
+  const { key, title, requestId, details } = opts;
+  if (!env.ULIP_ALERT_WEBHOOK_URL || !shouldSendAlert(key)) {
+    return;
+  }
+  try {
+    await axios.post(
+      env.ULIP_ALERT_WEBHOOK_URL,
+      {
+        title,
+        requestId,
+        service: "ulip-gateway-service",
+        at: new Date().toISOString(),
+        details
+      },
+      {
+        timeout: 5000,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  } catch (err) {
+    const axErr = err as AxiosError;
+    logger.warn(
+      {
+        component: "ulipClient",
+        requestId,
+        key,
+        error: { message: axErr.message, code: axErr.code, status: axErr.response?.status }
+      },
+      "Failed to emit ULIP alert webhook"
+    );
+  }
 }
 
 function isCircuitOpen() {
@@ -39,6 +123,14 @@ function isCircuitOpen() {
     logger.warn({ component: "ulipClient" }, "Circuit breaker half-open (cooldown elapsed)");
     return false;
   }
+  void emitUlipAlert({
+    key: "ulip-short-circuit-active",
+    title: "ULIP short-circuit active",
+    details: {
+      openedAt: circuit.openedAt ? new Date(circuit.openedAt).toISOString() : null,
+      failureCount: circuit.failureCount
+    }
+  });
   return true;
 }
 
@@ -57,6 +149,14 @@ function recordFailure() {
       },
       "ULIP circuit breaker opened"
     );
+    void emitUlipAlert({
+      key: "ulip-circuit-open",
+      title: "ULIP circuit breaker opened",
+      details: {
+        failureCount: circuit.failureCount,
+        cooldownMs: env.ULIP_CIRCUIT_BREAKER_COOLDOWN_MS
+      }
+    });
   }
 }
 
@@ -85,7 +185,7 @@ async function loginToUlip(requestId?: string): Promise<string> {
   const start = Date.now();
   try {
     const response = await axios.post(loginUrl, body, {
-      timeout: env.ULIP_TIMEOUT_MS,
+      timeout: env.ULIP_TIMEOUT_LOGIN_MS,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json"
@@ -108,10 +208,11 @@ async function loginToUlip(requestId?: string): Promise<string> {
 
     if (data?.error && String(data.error).toLowerCase() === "true") {
       recordFailure();
-      throw new ApiError({
+      throw new UlipRequestError({
         statusCode: 502,
         code: "ULIP_UNAVAILABLE",
-        message: "ULIP login failed"
+        message: "ULIP login failed",
+        retryable: true
       });
     }
 
@@ -124,10 +225,11 @@ async function loginToUlip(requestId?: string): Promise<string> {
 
     if (!token || typeof token !== "string") {
       recordFailure();
-      throw new ApiError({
+      throw new UlipRequestError({
         statusCode: 502,
         code: "ULIP_BAD_RESPONSE",
-        message: "ULIP login returned unexpected response"
+        message: "ULIP login returned unexpected response",
+        retryable: false
       });
     }
 
@@ -159,25 +261,29 @@ async function loginToUlip(requestId?: string): Promise<string> {
     recordFailure();
 
     if (axErr.code === "ECONNABORTED") {
-      throw new ApiError({
+      throw new UlipRequestError({
         statusCode: 504,
         code: "ULIP_TIMEOUT",
-        message: "ULIP login timed out"
+        message: "ULIP login timed out",
+        retryable: true
       });
     }
 
     if (axErr.response) {
-      throw new ApiError({
+      const retryable = axErr.response.status === 429 || axErr.response.status >= 500;
+      throw new UlipRequestError({
         statusCode: 502,
         code: "ULIP_UNAVAILABLE",
-        message: "ULIP login failed"
+        message: "ULIP login failed",
+        retryable
       });
     }
 
-    throw new ApiError({
+    throw new UlipRequestError({
       statusCode: 502,
       code: "ULIP_UNAVAILABLE",
-      message: "ULIP login failed"
+      message: "ULIP login failed",
+      retryable: true
     });
   }
 }
@@ -193,15 +299,20 @@ async function retryWithBackoff<T>(
     try {
       return await fn(attempt);
     } catch (err) {
-      if (attempt >= maxRetries) {
+      const retryable = err instanceof UlipRequestError ? err.retryable : false;
+      if (!retryable || attempt >= maxRetries) {
         throw err;
       }
-      const delayMs = Math.min(1000 * 2 ** attempt, 8000);
+      const baseDelayMs = Math.min(1000 * 2 ** attempt, 8000);
+      const jitterMs = Math.round(Math.random() * baseDelayMs * 0.3);
+      const delayMs = baseDelayMs + jitterMs;
       logger.warn(
         {
           requestId,
           component: "ulipClient",
           attempt,
+          baseDelayMs,
+          jitterMs,
           delayMs
         },
         "Retrying ULIP call after failure"
@@ -234,13 +345,14 @@ export async function callUlip<TRequest, TResponse>(
   const token = await loginToUlip(requestId);
 
   const url = buildUlipUrl(env.ULIP_BASE_URL, path);
+  const timeoutMs = timeoutForPath(path);
 
   return retryWithBackoff<TResponse>(
     async (attempt) => {
       const start = Date.now();
       try {
         const response = await axios.post(url, body, {
-          timeout: env.ULIP_TIMEOUT_MS,
+          timeout: timeoutMs,
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
@@ -254,8 +366,10 @@ export async function callUlip<TRequest, TResponse>(
             requestId,
             component: "ulipClient",
             url,
+            path,
             attempt,
             durationMs,
+            timeoutMs,
             statusCode: response.status
           },
           "ULIP call completed"
@@ -272,8 +386,10 @@ export async function callUlip<TRequest, TResponse>(
             requestId,
             component: "ulipClient",
             url,
+            path,
             attempt,
             durationMs,
+            timeoutMs,
             error: {
               message: axErr.message,
               code: axErr.code,
@@ -286,30 +402,34 @@ export async function callUlip<TRequest, TResponse>(
 
         if (axErr.code === "ECONNABORTED") {
           recordFailure();
-          throw new ApiError({
+          throw new UlipRequestError({
             statusCode: 504,
             code: "ULIP_TIMEOUT",
-            message: "ULIP request timed out"
+            message: "ULIP request timed out",
+            retryable: true
           });
         }
 
         if (axErr.response) {
           const status = axErr.response.status;
-          if (status >= 500 || status === 429) {
+          const retryable = status >= 500 || status === 429;
+          if (retryable) {
             recordFailure();
           }
-          throw new ApiError({
+          throw new UlipRequestError({
             statusCode: 502,
             code: "ULIP_UNAVAILABLE",
-            message: "ULIP request failed"
+            message: "ULIP request failed",
+            retryable
           });
         }
 
         recordFailure();
-        throw new ApiError({
+        throw new UlipRequestError({
           statusCode: 502,
           code: "ULIP_UNAVAILABLE",
-          message: "ULIP request failed"
+          message: "ULIP request failed",
+          retryable: true
         });
       }
     },
