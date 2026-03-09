@@ -7,7 +7,8 @@ import {
   getVehicleDetailsHandler,
   getDriverDetailsHandler,
   getFastagDetailsHandler,
-  getEChallanDetailsHandler
+  getEChallanDetailsHandler,
+  getMcaDetailsHandler
 } from "../controllers/ulipController";
 
 const vehicleDetailsSchema = Joi.object({
@@ -29,6 +30,10 @@ const fastagSchema = Joi.object({
 
 const echallanSchema = Joi.object({
   vehicleNumber: Joi.string().trim().min(4).max(32).required()
+});
+
+const mcaSchema = Joi.object({
+  CIN: Joi.string().trim().min(5).max(64).required()
 });
 
 export const ulipRouter = Router();
@@ -63,5 +68,13 @@ ulipRouter.post(
   apiRateLimiter,
   validateBody(echallanSchema),
   getEChallanDetailsHandler
+);
+
+ulipRouter.post(
+  "/ulip/v1/mca/details",
+  internalApiKeyAuth,
+  apiRateLimiter,
+  validateBody(mcaSchema),
+  getMcaDetailsHandler
 );
 
