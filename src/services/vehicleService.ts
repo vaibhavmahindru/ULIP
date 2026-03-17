@@ -80,11 +80,35 @@ function extractVahanPayload(ulipResponse: any): Record<string, unknown> {
   }
 
   if (typeof payload === "object" && payload !== null) {
+    const payloadObj = payload as Record<string, unknown>;
+
+    // Some ULIP variants wrap the actual VAHAN object in `data`
+    const dataNode = payloadObj.data;
+    if (Array.isArray(dataNode) && dataNode.length > 0 && typeof dataNode[0] === "object") {
+      return dataNode[0] as Record<string, unknown>;
+    }
+    if (dataNode && typeof dataNode === "object" && !Array.isArray(dataNode)) {
+      return dataNode as Record<string, unknown>;
+    }
+
+    // Some variants wrap again in `response`
+    const nestedResponse = payloadObj.response;
+    if (
+      Array.isArray(nestedResponse) &&
+      nestedResponse.length > 0 &&
+      typeof nestedResponse[0] === "object"
+    ) {
+      return nestedResponse[0] as Record<string, unknown>;
+    }
+    if (nestedResponse && typeof nestedResponse === "object" && !Array.isArray(nestedResponse)) {
+      return nestedResponse as Record<string, unknown>;
+    }
+
     if (Array.isArray(payload) && payload.length > 0 && typeof payload[0] === "object") {
       return payload[0] as Record<string, unknown>;
     }
     if (!Array.isArray(payload)) {
-      return payload as Record<string, unknown>;
+      return payloadObj;
     }
   }
 
