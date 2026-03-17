@@ -4,6 +4,7 @@ import { getDriverDetailsFromUlip } from "../services/sarathiService";
 import { getFastagDetailsFromUlip } from "../services/fastagService";
 import { getEChallanDetailsFromUlip } from "../services/echallanService";
 import { getMcaCompanyDetailsFromUlip } from "../services/mcaService";
+import { getHdfcFastagDetails } from "../services/hdfcFastagService";
 
 export async function getVehicleDetailsHandler(
   req: Request,
@@ -105,6 +106,32 @@ export async function getMcaDetailsHandler(
       requestId: req.id,
       data: details,
       source: "ULIP_MCA"
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getHdfcFastagDetailsHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { fromDate, toDate, vehicleNumber } = req.body as {
+      fromDate: string;
+      toDate: string;
+      vehicleNumber: string;
+    };
+
+    const details = await getHdfcFastagDetails({ fromDate, toDate, vehicleNumber });
+
+    res.status(200).json({
+      requestId: req.id,
+      data: {
+        hdfcFastag: details
+      },
+      source: "HDFC_FASTAG"
     });
   } catch (err) {
     next(err);

@@ -8,7 +8,8 @@ import {
   getDriverDetailsHandler,
   getFastagDetailsHandler,
   getEChallanDetailsHandler,
-  getMcaDetailsHandler
+  getMcaDetailsHandler,
+  getHdfcFastagDetailsHandler
 } from "../controllers/ulipController";
 
 const vehicleDetailsSchema = Joi.object({
@@ -34,6 +35,12 @@ const echallanSchema = Joi.object({
 
 const mcaSchema = Joi.object({
   CIN: Joi.string().trim().min(5).max(64).required()
+});
+
+const hdfcFastagSchema = Joi.object({
+  fromDate: Joi.string().trim().required(), // format expected by HDFC: YYYYMMDD HHMMSS
+  toDate: Joi.string().trim().required(), // format expected by HDFC: YYYYMMDD HHMMSS
+  vehicleNumber: Joi.string().trim().min(4).max(32).required()
 });
 
 export const ulipRouter = Router();
@@ -76,5 +83,13 @@ ulipRouter.post(
   apiRateLimiter,
   validateBody(mcaSchema),
   getMcaDetailsHandler
+);
+
+ulipRouter.post(
+  "/ulip/v1/hdfc-fastag",
+  internalApiKeyAuth,
+  apiRateLimiter,
+  validateBody(hdfcFastagSchema),
+  getHdfcFastagDetailsHandler
 );
 
