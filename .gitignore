@@ -5,3 +5,5 @@ dist/
 
 ulipMiddleware.pem
 instructions.txt
+
+.DS_Store
