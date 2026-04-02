@@ -4,6 +4,8 @@ Minimal, secure Node.js/Express service that acts as an internal abstraction lay
 
 It runs on an EC2 instance (ap-south-1), binds only to `127.0.0.1`, and is intended to sit behind Nginx. All ULIP-specific logic is contained in a service layer; the SaaS only talks to this gateway over internal REST endpoints.
 
+**Route-level documentation (methods, bodies, response shapes, error codes, upstream mapping):** see **[ENDPOINTS.md](./ENDPOINTS.md)**.
+
 ---
 
 ### Features
@@ -19,10 +21,13 @@ It runs on an EC2 instance (ap-south-1), binds only to `127.0.0.1`, and is inten
   - Login with ULIP credentials from env vars.
   - Retry only for transient failures (`timeout`, network errors, `429`, `5xx`).
   - Exponential backoff with jitter to prevent retry storms.
-  - Per-endpoint timeout overrides (VAHAN/SARATHI/FASTAG/ECHALLAN/login).
+  - Per-endpoint timeout overrides (VAHAN, SARATHI, FASTAG, ECHALLAN, EWAYBILL, plus dedicated login timeout).
   - Optional circuit breaker short-circuit when ULIP repeatedly fails.
   - Optional alert webhook when circuit opens / short-circuit is active.
   - Structured logging of duration, retries, failures.
+- **Integrated ULIP APIs** (normalized JSON where noted in [ENDPOINTS.md](./ENDPOINTS.md)):
+  - VAHAN vehicle (`VAHAN/04`), SARATHI driver (`SARATHI/01`), FASTag (`FASTAG/01` + `FASTAG/02`), E-Challan (`ECHALLAN/01`), E-Way Bill (`EWAYBILL/01`), MCA company (`MCA/03` + `MCA/04`).
+  - Separate route for **HDFC** corporate FASTag transactions (external API, not ULIP).
 - **Observability**:
   - JSON logs (Pino) with `requestId`.
   - Health endpoint at `GET /health`.
@@ -46,12 +51,31 @@ Key variables:
 - **ULIP_LOGIN_URL**: ULIP login URL (e.g. `https://www.ulip.dpiit.gov.in/ulip/v1.0.0/user/login`).
 - **ULIP_TIMEOUT_MS / ULIP_RETRY_COUNT**: HTTP timeout and retry attempts.
 - **ULIP_TIMEOUT_LOGIN_MS**: login timeout override.
-- **ULIP_TIMEOUT_VAHAN_MS / ULIP_TIMEOUT_SARATHI_MS / ULIP_TIMEOUT_FASTAG_MS / ULIP_TIMEOUT_ECHALLAN_MS**: endpoint timeout overrides.
+- **ULIP_TIMEOUT_VAHAN_MS / ULIP_TIMEOUT_SARATHI_MS / ULIP_TIMEOUT_FASTAG_MS / ULIP_TIMEOUT_ECHALLAN_MS / ULIP_TIMEOUT_EWAYBILL_MS**: optional per-ULIP-route HTTP timeouts (each defaults to `ULIP_TIMEOUT_MS` if unset).
 - **RATE_LIMIT_WINDOW_MS / RATE_LIMIT_MAX**: rate limiting window and max requests.
 - **ULIP_CIRCUIT_BREAKER_***: optional circuit breaker settings.
 - **ULIP_ALERT_WEBHOOK_URL / ULIP_ALERT_COOLDOWN_MS**: optional outbound alerts when ULIP repeatedly fails.
 
 No credentials are hardcoded in code; everything comes from env vars.
+
+---
+
+### HTTP API overview
+
+All gateway routes are mounted at the **root** of the app (no `/api` prefix). Protected routes require header `X-Internal-API-Key: <INTERNAL_API_KEY>` and `Content-Type: application/json`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | Liveness; no auth |
+| `POST` | `/ulip/v1/vehicle/details` | VAHAN vehicle RC-style details |
+| `POST` | `/ulip/v1/driver/details` | SARATHI driving licence |
+| `POST` | `/ulip/v1/fastag/details` | FASTag tag + toll transactions |
+| `POST` | `/ulip/v1/echallan/details` | E-Challan pending/disposed lists |
+| `POST` | `/ulip/v1/ewaybill/details` | E-Way Bill by `ewbNo` |
+| `POST` | `/ulip/v1/mca/details` | MCA company + financials + founders |
+| `POST` | `/ulip/v1/hdfc-fastag` | HDFC wallet txn API (not ULIP) |
+
+Success and error bodies include a **`requestId`** for correlation. **MCA** and **HDFC** responses use a slightly different placement of `source` than the other ULIP routes; see [ENDPOINTS.md](./ENDPOINTS.md) for exact JSON envelopes, validation rules, and error codes.
 
 ---
 
@@ -234,8 +258,10 @@ This architecture is the easiest to operate for initial production traffic. Move
 
    ```bash
    cp .env.example .env
-   # edit .env with your real ULIP credentials and base URLs
+   # edit .env: INTERNAL_API_KEY, ULIP_USERNAME, ULIP_PASSWORD, ULIP_BASE_URL, ULIP_LOGIN_URL
    ```
+
+   For ULIP **staging**, point `ULIP_BASE_URL` (and typically `ULIP_LOGIN_URL`) at the staging host your DPIIT/ULIP project uses, for example `https://www.ulipstaging.dpiit.gov.in/ulip/v1.0.0` — the gateway appends paths such as `EWAYBILL/01` relative to that base.
 
 2. **Run the service**:
 
@@ -245,21 +271,42 @@ This architecture is the easiest to operate for initial production traffic. Move
    npm start
    ```
 
-3. **Call health endpoint**:
+   Default bind is `127.0.0.1` on `PORT` from `.env` (often `4000`).
+
+3. **Health** (no API key):
 
    ```bash
    curl http://127.0.0.1:4000/health
    ```
 
-4. **Call vehicle details endpoint** (replace placeholders):
+4. **ULIP-backed examples** (set `INTERNAL_API_KEY` in your shell or substitute the value):
 
    ```bash
-   curl -X POST http://127.0.0.1:4000/ulip/v1/vehicle/details \
+   export INTERNAL_API_KEY='your-long-internal-key'
+
+   curl -sS -X POST http://127.0.0.1:4000/ulip/v1/vehicle/details \
      -H "Content-Type: application/json" \
      -H "X-Internal-API-Key: $INTERNAL_API_KEY" \
      -d '{"vehicleNumber":"DL12CX0574"}'
+
+   curl -sS -X POST http://127.0.0.1:4000/ulip/v1/driver/details \
+     -H "Content-Type: application/json" \
+     -H "X-Internal-API-Key: $INTERNAL_API_KEY" \
+     -d '{"dlnumber":"HR51 20210018922","dob":"1987-05-26"}'
+
+   curl -sS -X POST http://127.0.0.1:4000/ulip/v1/ewaybill/details \
+     -H "Content-Type: application/json" \
+     -H "X-Internal-API-Key: $INTERNAL_API_KEY" \
+     -d '{"ewbNo":"101000609218"}'
+
+   curl -sS -X POST http://127.0.0.1:4000/ulip/v1/mca/details \
+     -H "Content-Type: application/json" \
+     -H "X-Internal-API-Key: $INTERNAL_API_KEY" \
+     -d '{"CIN":"U74999DL2019PTC348888"}'
    ```
 
-Logs are output as structured JSON on stdout and include a `requestId` you can use to trace a call end-to-end.
+   Full request/response schemas, FASTag, E-Challan, HDFC body formats, and error catalog: **[ENDPOINTS.md](./ENDPOINTS.md)**.
+
+Logs are structured JSON on stdout and include `requestId` for end-to-end tracing.
 
 ---
