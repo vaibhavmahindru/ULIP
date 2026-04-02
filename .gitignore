@@ -6,4 +6,5 @@ dist/
 ulipMiddleware.pem
 instructions.txt
 
+# macOS folder metadata (never commit)
 .DS_Store
