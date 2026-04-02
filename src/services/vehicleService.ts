@@ -133,12 +133,17 @@ export async function getVehicleDetailsFromUlip(params: {
   requestId?: string;
 }): Promise<VehicleDetails> {
   const { vehicleNumber, requestId } = params;
+  const requestPayload = { vehiclenumber: vehicleNumber };
 
   const ulipResponse = await callUlip<{ vehiclenumber: string }, any>({
     path: "VAHAN/04",
-    body: { vehiclenumber: vehicleNumber },
+    body: requestPayload,
     requestId
   });
+
+  // Raw ULIP response from VAHAN/04 before backend processing
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify(ulipResponse, null, 2));
 
   const root = extractVahanPayload(ulipResponse);
 
