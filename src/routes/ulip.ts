@@ -9,6 +9,7 @@ import {
   getFastagDetailsHandler,
   getEChallanDetailsHandler,
   getMcaDetailsHandler,
+  getEwaybillDetailsHandler,
   getHdfcFastagDetailsHandler
 } from "../controllers/ulipController";
 
@@ -35,6 +36,10 @@ const echallanSchema = Joi.object({
 
 const mcaSchema = Joi.object({
   CIN: Joi.string().trim().min(5).max(64).required()
+});
+
+const ewaybillSchema = Joi.object({
+  ewbNo: Joi.string().trim().pattern(/^\d+$/).min(8).max(16).required()
 });
 
 const hdfcFastagSchema = Joi.object({
@@ -83,6 +88,14 @@ ulipRouter.post(
   apiRateLimiter,
   validateBody(mcaSchema),
   getMcaDetailsHandler
+);
+
+ulipRouter.post(
+  "/ulip/v1/ewaybill/details",
+  internalApiKeyAuth,
+  apiRateLimiter,
+  validateBody(ewaybillSchema),
+  getEwaybillDetailsHandler
 );
 
 ulipRouter.post(

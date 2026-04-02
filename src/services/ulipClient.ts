@@ -56,6 +56,9 @@ function timeoutForPath(path: string): number {
   if (path.startsWith("ECHALLAN/")) {
     return env.ULIP_TIMEOUT_ECHALLAN_MS ?? env.ULIP_TIMEOUT_MS;
   }
+  if (path.startsWith("EWAYBILL/")) {
+    return env.ULIP_TIMEOUT_EWAYBILL_MS ?? env.ULIP_TIMEOUT_MS;
+  }
   return env.ULIP_TIMEOUT_MS;
 }
 

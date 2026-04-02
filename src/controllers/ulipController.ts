@@ -4,6 +4,7 @@ import { getDriverDetailsFromUlip } from "../services/sarathiService";
 import { getFastagDetailsFromUlip } from "../services/fastagService";
 import { getEChallanDetailsFromUlip } from "../services/echallanService";
 import { getMcaCompanyDetailsFromUlip } from "../services/mcaService";
+import { getEwaybillDetailsFromUlip } from "../services/ewaybillService";
 import { getHdfcFastagDetails } from "../services/hdfcFastagService";
 
 export async function getVehicleDetailsHandler(
@@ -86,6 +87,27 @@ export async function getEChallanDetailsHandler(
       data: {
         echallan: details,
         source: "ULIP_ECHALLAN"
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getEwaybillDetailsHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { ewbNo } = req.body as { ewbNo: string };
+    const details = await getEwaybillDetailsFromUlip({ ewbNo, requestId: req.id });
+
+    res.status(200).json({
+      requestId: req.id,
+      data: {
+        ewaybill: details,
+        source: "ULIP_EWAYBILL"
       }
     });
   } catch (err) {

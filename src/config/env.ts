@@ -18,6 +18,7 @@ const envSchema = Joi.object({
   ULIP_TIMEOUT_SARATHI_MS: Joi.number().integer().min(100).max(120_000).optional(),
   ULIP_TIMEOUT_FASTAG_MS: Joi.number().integer().min(100).max(120_000).optional(),
   ULIP_TIMEOUT_ECHALLAN_MS: Joi.number().integer().min(100).max(120_000).optional(),
+  ULIP_TIMEOUT_EWAYBILL_MS: Joi.number().integer().min(100).max(120_000).optional(),
 
   // Optional but recommended, ULIP seems to use /user/login for bearer token
   ULIP_LOGIN_URL: Joi.string().uri().optional(),
@@ -76,6 +77,7 @@ export const env = {
   ULIP_TIMEOUT_SARATHI_MS: value.ULIP_TIMEOUT_SARATHI_MS as number | undefined,
   ULIP_TIMEOUT_FASTAG_MS: value.ULIP_TIMEOUT_FASTAG_MS as number | undefined,
   ULIP_TIMEOUT_ECHALLAN_MS: value.ULIP_TIMEOUT_ECHALLAN_MS as number | undefined,
+  ULIP_TIMEOUT_EWAYBILL_MS: value.ULIP_TIMEOUT_EWAYBILL_MS as number | undefined,
   ULIP_LOGIN_URL: value.ULIP_LOGIN_URL as string | undefined,
 
   RATE_LIMIT_WINDOW_MS: value.RATE_LIMIT_WINDOW_MS as number,
