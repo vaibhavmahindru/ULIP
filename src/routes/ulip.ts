@@ -5,6 +5,7 @@ import { apiRateLimiter } from "../middleware/rateLimit";
 import { validateBody } from "../middleware/validate";
 import {
   getVehicleDetailsHandler,
+  getLegacyVehicleDetailsHandler,
   getDriverDetailsHandler,
   getFastagDetailsHandler,
   getEChallanDetailsHandler,
@@ -56,6 +57,14 @@ ulipRouter.post(
   apiRateLimiter,
   validateBody(vehicleDetailsSchema),
   getVehicleDetailsHandler
+);
+
+ulipRouter.post(
+  "/ulip/v1/legacy-vehicle/details",
+  internalApiKeyAuth,
+  apiRateLimiter,
+  validateBody(vehicleDetailsSchema),
+  getLegacyVehicleDetailsHandler
 );
 
 ulipRouter.post(

@@ -1,3 +1,4 @@
+import { parseStringPromise } from "xml2js";
 import { callUlip } from "./ulipClient";
 import { ApiError } from "../utils/errors";
 
@@ -128,25 +129,60 @@ function extractVahanPayload(ulipResponse: any): Record<string, unknown> {
   });
 }
 
-export async function getVehicleDetailsFromUlip(params: {
-  vehicleNumber: string;
-  requestId?: string;
-}): Promise<VehicleDetails> {
-  const { vehicleNumber, requestId } = params;
-  const requestPayload = { vehiclenumber: vehicleNumber };
+function extractUlipXmlFromVahan01Response(ulipResponse: any): string {
+  const resp = ulipResponse?.response;
+  if (Array.isArray(resp) && resp[0]?.response != null) {
+    const payload = resp[0].response;
+    if (typeof payload === "string") {
+      const trimmed = payload.trim();
+      if (trimmed === "Vehicle Details not Found") {
+        throw new ApiError({
+          statusCode: 404,
+          code: "NOT_FOUND",
+          message: "Vehicle details not found",
+          expose: true
+        });
+      }
+      return payload;
+    }
+  }
 
-  const ulipResponse = await callUlip<{ vehiclenumber: string }, any>({
-    path: "VAHAN/04",
-    body: requestPayload,
-    requestId
+  throw new ApiError({
+    statusCode: 502,
+    code: "ULIP_BAD_RESPONSE",
+    message: "Unexpected ULIP VAHAN/01 response (expected XML string)"
   });
+}
 
-  // Raw ULIP response from VAHAN/04 before backend processing
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify(ulipResponse, null, 2));
+async function parseVahan01XmlToRecord(xml: string): Promise<Record<string, unknown>> {
+  let parsed: unknown;
+  try {
+    parsed = await parseStringPromise(xml.trim(), {
+      explicitArray: false,
+      trim: true
+    });
+  } catch {
+    throw new ApiError({
+      statusCode: 502,
+      code: "ULIP_BAD_RESPONSE",
+      message: "Failed to parse VAHAN/01 XML"
+    });
+  }
+  const root = (parsed as { VehicleDetails?: unknown })?.VehicleDetails ?? parsed;
+  if (root && typeof root === "object" && !Array.isArray(root)) {
+    return root as Record<string, unknown>;
+  }
+  throw new ApiError({
+    statusCode: 502,
+    code: "ULIP_BAD_RESPONSE",
+    message: "Unexpected VAHAN/01 XML structure"
+  });
+}
 
-  const root = extractVahanPayload(ulipResponse);
-
+function mapVahanRecordToVehicleDetails(
+  root: Record<string, unknown>,
+  vehicleNumber: string
+): VehicleDetails {
   const regNo =
     (root.rcRegnNo as string | undefined) ??
     (root.rc_regn_no as string | undefined) ??
@@ -154,7 +190,7 @@ export async function getVehicleDetailsFromUlip(params: {
     (root.registration_number as string | undefined) ??
     vehicleNumber;
 
-  const details: VehicleDetails = {
+  return {
     vehicleNumber: String(regNo),
 
     ownerName:
@@ -298,7 +334,38 @@ export async function getVehicleDetailsFromUlip(params: {
       normalizeString(root.vehicle_category) ??
       null
   };
-
-  return details;
 }
 
+export async function getVehicleDetailsFromUlip(params: {
+  vehicleNumber: string;
+  requestId?: string;
+}): Promise<VehicleDetails> {
+  const { vehicleNumber, requestId } = params;
+
+  const ulipResponse = await callUlip<{ vehiclenumber: string }, any>({
+    path: "VAHAN/04",
+    body: { vehiclenumber: vehicleNumber },
+    requestId
+  });
+
+  const root = extractVahanPayload(ulipResponse);
+  return mapVahanRecordToVehicleDetails(root, vehicleNumber);
+}
+
+/** VAHAN/01 (XML) — same {@link VehicleDetails} shape as {@link getVehicleDetailsFromUlip} (VAHAN/04). */
+export async function getLegacyVehicleDetailsFromUlip(params: {
+  vehicleNumber: string;
+  requestId?: string;
+}): Promise<VehicleDetails> {
+  const { vehicleNumber, requestId } = params;
+
+  const ulipResponse = await callUlip<{ vehiclenumber: string }, any>({
+    path: "VAHAN/01",
+    body: { vehiclenumber: vehicleNumber },
+    requestId
+  });
+
+  const xml = extractUlipXmlFromVahan01Response(ulipResponse);
+  const root = await parseVahan01XmlToRecord(xml);
+  return mapVahanRecordToVehicleDetails(root, vehicleNumber);
+}
