@@ -133,6 +133,7 @@ Validation failures return **422** with `code: "VALIDATION_ERROR"`. The handler 
 |--------|------|----------|------|
 | GET | `/health` | — | No |
 | POST | `/ulip/v1/vehicle/details` | ULIP `VAHAN/04` | Yes |
+| POST | `/ulip/v1/legacy-vehicle/details` | ULIP `VAHAN/01` (XML → same JSON as vehicle) | Yes |
 | POST | `/ulip/v1/driver/details` | ULIP `SARATHI/01` | Yes |
 | POST | `/ulip/v1/fastag/details` | ULIP `FASTAG/01` + `FASTAG/02` | Yes |
 | POST | `/ulip/v1/echallan/details` | ULIP `ECHALLAN/01` | Yes |
@@ -217,6 +218,19 @@ Normalized VAHAN fields under `data.vehicle`. `data.source` is `ULIP_VAHAN`.
   }
 }
 ```
+
+---
+
+## Legacy vehicle details (ULIP `VAHAN/01`)
+
+- **Method:** `POST`
+- **Path:** `/ulip/v1/legacy-vehicle/details`
+
+Same **request body** and **success JSON envelope** as `/ulip/v1/vehicle/details` (VAHAN/04 section above): `data.vehicle` uses the identical normalized field set, and `data.source` is `ULIP_VAHAN`.
+
+**Difference:** upstream is **`VAHAN/01`**, where `response[0].response` is an **XML string**. The gateway parses it with `xml2js` (root element commonly `VehicleDetails`), then maps through the **same** field logic as `VAHAN/04` (snake_case XML tags and camelCase JSON keys both supported).
+
+If ULIP returns the plain string `Vehicle Details not Found`, the gateway responds with **404** and `NOT_FOUND`, same as the primary vehicle route when applicable.
 
 ---
 

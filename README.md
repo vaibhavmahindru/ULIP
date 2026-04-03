@@ -67,7 +67,8 @@ All gateway routes are mounted at the **root** of the app (no `/api` prefix). Pr
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/health` | Liveness; no auth |
-| `POST` | `/ulip/v1/vehicle/details` | VAHAN vehicle RC-style details |
+| `POST` | `/ulip/v1/vehicle/details` | VAHAN vehicle RC-style details (`VAHAN/04`, JSON) |
+| `POST` | `/ulip/v1/legacy-vehicle/details` | Same response shape as above via `VAHAN/01` (XML) |
 | `POST` | `/ulip/v1/driver/details` | SARATHI driving licence |
 | `POST` | `/ulip/v1/fastag/details` | FASTag tag + toll transactions |
 | `POST` | `/ulip/v1/echallan/details` | E-Challan pending/disposed lists |
